@@ -53,6 +53,7 @@ def train_and_log_models(xtrain, xtest, ytrain, ytest, file_path):
         KNeighborsClassifier(), GaussianNB(), SGDClassifier(),
         GradientBoostingClassifier(), AdaBoostClassifier(), ExtraTreesClassifier()
     ]
+    model_dict = {}
     for model in models:
         model_name = type(model).__name__.replace('Classifier', ' Classifier').replace('Regression', ' Regression')
         with mlflow.start_run(run_name=model_name, description=f'A {model_name.lower()} model for air quality classification using metrics like accuracy and recall for various classes.') as run:
@@ -63,6 +64,7 @@ def train_and_log_models(xtrain, xtest, ytrain, ytest, file_path):
             log_metrics_and_params(model, xtrain, ytrain, xtest, ytest, report)
             mlflow.log_params({'Model': model_name})
             mlflow.log_artifact(file_path)
+            model_dict.update({model_name:report['accuracy']})
             mlflow.log_input(mlflow.data.from_pandas(xtrain), context="Train")
             mlflow.log_input(mlflow.data.from_pandas(xtest), context="Eval")
             evaluation_results = pd.DataFrame(report).transpose().reset_index().rename(columns={'index':'Metrics'})
@@ -72,15 +74,18 @@ def train_and_log_models(xtrain, xtest, ytrain, ytest, file_path):
             mlflow.set_tag("Model", model_name)
             plot_confusion_matrix(ytest, ypred, model_name)
             mlflow.log_artifact(f'confusion_matrix.png')
+            model_uri = f'runs:/{mlflow.active_run().info.run_id}/{model_name}'
+            mlflow.register_model(model_uri, model_name)
             
         mlflow.end_run()
+    return pd.DataFrame.from_dict(model_dict, orient='index', columns=['Accuracy'])\
+        .reset_index().rename(columns={'index':'Model'}).sort_values(by='Accuracy', ascending=False)
 
 if __name__ == "__main__":
     file_path = r'C:\Users\GANAPA\Downloads\MLFlow (MLOps)\pollution_dataset.csv'
     xtrain, xtest, ytrain, ytest = load_data(file_path)
     mlflow.set_tracking_uri('http://localhost:5000')
     experiment_name = 'Air Quality Pred'
-    if not mlflow.get_experiment_by_name(experiment_name):
-        mlflow.create_experiment(experiment_name, description='A classification task to predict air quality using various models.')
     mlflow.set_experiment(experiment_name)
-    train_and_log_models(xtrain, xtest, ytrain, ytest, file_path)
+    model_results = train_and_log_models(xtrain, xtest, ytrain, ytest, file_path)
+    print(model_results)
