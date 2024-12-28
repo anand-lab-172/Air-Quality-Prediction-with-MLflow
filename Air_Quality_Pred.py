@@ -8,9 +8,11 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import classification_report, f1_score, precision_score, recall_score, log_loss, confusion_matrix
 from imblearn.over_sampling import SMOTE
+from mlflow.tracking import MlflowClient
 warnings.simplefilter("ignore")
 
 def load_data(file_path):
+
     df = pd.read_csv(file_path)
     x = df.drop('Air Quality', axis=1)
     y = df['Air Quality']
@@ -19,6 +21,7 @@ def load_data(file_path):
     return train_test_split(x_resampled, y_resampled, test_size=0.2, random_state=42)
 
 def log_metrics_and_params(model, xtrain, ytrain, xtest, ytest, report):
+
     metrics = {
         'Accuracy': report['accuracy'],
         'F1_Score_Macro': report['macro avg']['f1-score'],
@@ -38,6 +41,7 @@ def log_metrics_and_params(model, xtrain, ytrain, xtest, ytest, report):
     mlflow.log_params(model.get_params())
 
 def plot_confusion_matrix(ytest, ypred, model_name):
+
     cm = confusion_matrix(ytest, ypred)
     plt.figure(figsize=(10, 7))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
@@ -47,7 +51,19 @@ def plot_confusion_matrix(ytest, ypred, model_name):
     plt.savefig('confusion_matrix.png')
     plt.close()
 
+
+def register_model(model_name, register=False):
+
+    client = MlflowClient()
+    if register:
+        try: client.delete_registered_model(name=model_name)
+        except Exception as e: print(f"Failed to delete model {model_name}: {e}")
+
+        model_uri = f'runs:/{mlflow.active_run().info.run_id}/{model_name}'
+        mlflow.register_model(model_uri, model_name)
+
 def train_and_log_models(xtrain, xtest, ytrain, ytest, file_path):
+
     models = [
         LogisticRegression(), DecisionTreeClassifier(), RandomForestClassifier(),
         KNeighborsClassifier(), GaussianNB(), SGDClassifier(),
@@ -73,19 +89,29 @@ def train_and_log_models(xtrain, xtest, ytrain, ytest, file_path):
             mlflow.log_table(data=evaluation_results, artifact_file="evaluation_results.json")
             mlflow.set_tag("Model", model_name)
             plot_confusion_matrix(ytest, ypred, model_name)
-            mlflow.log_artifact(f'confusion_matrix.png')
-            model_uri = f'runs:/{mlflow.active_run().info.run_id}/{model_name}'
-            mlflow.register_model(model_uri, model_name)
+            mlflow.log_artifact('confusion_matrix.png')
+            register_model(model_name, register = False)
+            
             
         mlflow.end_run()
     return pd.DataFrame.from_dict(model_dict, orient='index', columns=['Accuracy'])\
         .reset_index().rename(columns={'index':'Model'}).sort_values(by='Accuracy', ascending=False)
 
+def run_logs(experiment_name, delete_runs=True):
+
+    if delete_runs:
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment:
+            for run in mlflow.search_runs(experiment_ids=[experiment.experiment_id]).itertuples():
+                mlflow.delete_run(run.run_id)
+                print(f"Deleted run {run.run_id} from {experiment_name}")
+        else:
+            print(f"Experiment '{experiment_name}' not found.")
+
 if __name__ == "__main__":
     file_path = r'C:\Users\GANAPA\Downloads\MLFlow (MLOps)\pollution_dataset.csv'
     xtrain, xtest, ytrain, ytest = load_data(file_path)
-    mlflow.set_tracking_uri('http://localhost:5000')
-    experiment_name = 'Air Quality Pred'
-    mlflow.set_experiment(experiment_name)
+    uri, experiment_name = 'http://localhost:5000', 'Air Quality'
+    mlflow.set_tracking_uri(uri), mlflow.set_experiment(experiment_name), run_logs(experiment_name)
     model_results = train_and_log_models(xtrain, xtest, ytrain, ytest, file_path)
     print(model_results)
