@@ -1,0 +1,22 @@
+Model,Accuracy
+ExtraTrees Classifier,0.974375
+HistGradientBoosting Classifier,0.973125
+RandomForest Classifier,0.96375
+Stacking Classifier,0.960625
+GradientBoosting Classifier,0.95875
+QuadraticDiscriminantAnalysis,0.94125
+LinearDiscriminantAnalysis,0.931875
+DecisionTree Classifier,0.929375
+GaussianNB,0.9125
+KNeighbors Classifier,0.86625
+LinearSVC,0.8575
+Voting Classifier,0.8375
+NuSVC,0.806875
+SVC,0.7875
+MLP Classifier,0.748125
+Ridge Classifier,0.739375
+AdaBoost Classifier,0.733125
+Logistic Regression,0.71125
+PassiveAggressive Classifier,0.57125
+SGD Classifier,0.550625
+Perceptron,0.459375
