@@ -132,14 +132,21 @@ def run_logs(experiment_name, delete_runs=True):
             for run in mlflow.search_runs(experiment_ids=[experiment.experiment_id]).itertuples():
                 mlflow.delete_run(run.run_id)
                 print(f"Deleted run {run.run_id} from {experiment_name}")
+
                 # Deleting the folder of the run from root mlruns
                 run_folder = f"./mlruns/{experiment.experiment_id}/{run.run_id}"
                 shutil.rmtree(run_folder, ignore_errors=True)
                 print(f"Deleted folder {run_folder}")
+
                 # Deleting the datasets folder of the run from root mlruns
                 dataset_folder = f"./mlruns/{experiment.experiment_id}/datasets"
                 shutil.rmtree(dataset_folder, ignore_errors=True)
                 print(f"Deleted folder {dataset_folder}")
+                
+                # Deleting the old runs artifacts from root artifacts folder
+                artifact_folder = f"./artifacts/{run.run_id}"
+                shutil.rmtree(artifact_folder, ignore_errors=True)
+                print(f"Deleted folder {artifact_folder}")
                 
         else:
             print(f"Experiment '{experiment_name}' not found.")
@@ -184,3 +191,18 @@ if __name__ == "__main__":
     model_results = train_and_log_models(xtrain, xtest, ytrain, ytest, file_path, True)
     print(model_results)
     predict(model_results, data)
+
+
+# Hint:
+# ./artifacts or ./mlruns are under the root directory where the code is executed (all under same project folder)
+
+# Steps to run the code:
+# Run the MLflow.py file to train the models and predict the air quality using the best model
+# The confusion matrix for each model is saved as confusion_matrix.png
+# The evaluation results for each model are saved in evaluation_results.json
+# The models are registered with the same name and the old models are deleted automatically
+# The runs, datasets, and artifacts are deleted automatically
+# The experiment is created if it does not exist and set if it exists
+# The metrics and parameters are logged for each model
+# The best model is selected based on the accuracy and used to predict the air quality
+# The model results are saved in model_results.csv and the predicted air quality is saved in predicted_air_quality.csv
