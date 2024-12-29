@@ -59,7 +59,7 @@ pip install -r requirements.txt
 
 ## Project Structure
 - `requirements.txt`: List of dependencies required to run the project.
-- `notebooks/`: Directory containing Jupyter notebooks for exploratory data analysis and model experimentation.
+- `notebooks`: Directory containing Jupyter notebooks for exploratory data analysis and model experimentation.
 - `MLflow.py`: Main script for loading data, training models, and logging metrics.
 - `pollution_dataset.csv`: Dataset used for training and evaluation.
 - `predicted_air_quality.csv`: Output file containing the predicted air quality values.
