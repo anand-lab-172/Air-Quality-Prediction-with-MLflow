@@ -1,35 +1,46 @@
 """
 importing the required libraries and modules
 """
-import pandas as pd, numpy as np, warnings, mlflow, seaborn as sns, matplotlib.pyplot as plt, os, shutil
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier, ExtraTreesClassifier, HistGradientBoostingClassifier, VotingClassifier, StackingClassifier
+import pandas as pd, warnings, mlflow, seaborn as sns, matplotlib.pyplot as plt, shutil, time
+from sklearn.linear_model import LogisticRegression, RidgeClassifier, SGDClassifier, Perceptron, PassiveAggressiveClassifier
+from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
+from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier, ExtraTreesClassifier,
+                               VotingClassifier, StackingClassifier, BaggingClassifier, HistGradientBoostingClassifier)
+from imblearn.ensemble import BalancedRandomForestClassifier, EasyEnsembleClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.svm import SVC, NuSVC, LinearSVC
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.linear_model import SGDClassifier
+from sklearn.naive_bayes import GaussianNB, BernoulliNB
+from sklearn.neural_network import MLPClassifier
+from sklearn.semi_supervised import LabelPropagation, LabelSpreading
+from sklearn.calibration import CalibratedClassifierCV
+from lightgbm import LGBMClassifier
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, f1_score, precision_score, recall_score, log_loss, confusion_matrix
 from imblearn.over_sampling import SMOTE
-from sklearn.linear_model import RidgeClassifier, PassiveAggressiveClassifier, Perceptron
-from sklearn.svm import SVC, NuSVC, LinearSVC
-from sklearn.neural_network import MLPClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from mlflow.tracking import MlflowClient
 warnings.simplefilter("ignore")
 
+start_time = time.time()
 
 def load_data(file_path):
     """
     Loading the data and splitting the data into train and test sets
     Using SMOTE to balance the data (oversampling the minority class)
     """
+
     df = pd.read_csv(file_path)
+    """ df['Population_Z_Score'] = (df['Population_Density'] - df['Population_Density'].mean()) / df['Population_Density'].std()
+    df['Population_MinMax'] = (df['Population_Density'] - df['Population_Density'].min()) / (df['Population_Density'].max() - df['Population_Density'].min())
+    df['Density_PM2.5_Interaction'] = df['Population_Density'] * df['PM2.5']
+    df['Density_to_Industry_Ratio'] = df['Population_Density'] / df['Proximity_to_Industrial_Areas']
+    df['Temp_Humidity_Interaction'] = df['Temperature'] * df['Humidity'] """
+
     x = df.drop('Air Quality', axis=1)
     y = df['Air Quality']
     smote = SMOTE()
     x_resampled, y_resampled = smote.fit_resample(x, y)
-    return train_test_split(x_resampled, y_resampled, test_size=0.2, random_state=42)
+    return df, train_test_split(x_resampled, y_resampled, test_size=0.2, random_state=42)
 
 def log_metrics_and_params(model, xtrain, ytrain, xtest, ytest, report):
     """
@@ -87,15 +98,23 @@ def train_and_log_models(xtrain, xtest, ytrain, ytest, file_path, register=False
     defining the model name, logging the model, metrics, parameters, confusion matrix, and evaluation results.
     """
     models = [
-        LogisticRegression(), DecisionTreeClassifier(), RandomForestClassifier(),
-        KNeighborsClassifier(), GaussianNB(), SGDClassifier(),
-        GradientBoostingClassifier(), AdaBoostClassifier(), ExtraTreesClassifier(),
-        RidgeClassifier(), PassiveAggressiveClassifier(), Perceptron(), SVC(), NuSVC(), LinearSVC(),
-        VotingClassifier(estimators=[('lr', LogisticRegression()), ('rf', RandomForestClassifier())]),
-        StackingClassifier(estimators=[('dt', DecisionTreeClassifier()), ('gb', GradientBoostingClassifier())]),
-        MLPClassifier(activation='identity'), LinearDiscriminantAnalysis(),  QuadraticDiscriminantAnalysis(), HistGradientBoostingClassifier()
+    LogisticRegression(), DecisionTreeClassifier(), RandomForestClassifier(),
+    KNeighborsClassifier(), GaussianNB(), BernoulliNB(),
+    SGDClassifier(), GradientBoostingClassifier(), AdaBoostClassifier(),
+    ExtraTreesClassifier(), RidgeClassifier(), PassiveAggressiveClassifier(),
+    Perceptron(), SVC(), NuSVC(), LinearSVC(),
+    VotingClassifier(estimators=[('hg', HistGradientBoostingClassifier()), ('rf', RandomForestClassifier()), ('lgm',LGBMClassifier()), ('ext',ExtraTreesClassifier())]),
+    StackingClassifier(estimators=[('hg', HistGradientBoostingClassifier()), ('rf', RandomForestClassifier()), ('lgm',LGBMClassifier()), ('ext',ExtraTreesClassifier())]),
+    MLPClassifier(activation='logistic'), LinearDiscriminantAnalysis(),
+    QuadraticDiscriminantAnalysis(), HistGradientBoostingClassifier(),
+    BaggingClassifier(DecisionTreeClassifier()), ExtraTreeClassifier(), LGBMClassifier(), 
+    CalibratedClassifierCV(ExtraTreesClassifier()),
+    LabelPropagation(), LabelSpreading(),
+    BalancedRandomForestClassifier(), EasyEnsembleClassifier()
     ]
-    model_dict = {}
+
+    model_dict = dict()
+    print(f'Total no. of models available :{len(models)}')
     for model in models:
         model_name = type(model).__name__.replace('Classifier', ' Classifier').replace('Regression', ' Regression')
         with mlflow.start_run(run_name=model_name, description=f'A {model_name.lower()} model for air quality classification using metrics like accuracy and recall for various classes.') as run:
@@ -164,19 +183,23 @@ def define_experiment(uri, experiment_name):
         mlflow.set_experiment(experiment_name)
         print(f"Experiment '{experiment_name}' already exists with ID '{mlflow.get_experiment_by_name(experiment_name).experiment_id}'")
 
-def predict(model_results, data):
+def predict(model_results, data, pred=True):
     """
     Predicting the air quality using the best model
     """
-    name, model_version = model_results.iloc[:1].Model.values[0], '1'
-    print(f'{name} is the best model with an accuracy of {model_results.iloc[:1].Accuracy.values[0]*100}')
-    model_uri = f'models:/{name}/{model_version}'
-    load_model = mlflow.sklearn.load_model(model_uri)
-    pred = load_model.predict(data.drop('Air Quality', axis=1))
-    data['Predicted_Air_Quality'] = pred
-    data['Evaluate'] = data['Air Quality'] == data['Predicted_Air_Quality']
-    data.to_csv(r'C:\Users\GANAPA\Downloads\MLFlow (MLOps)\predicted_air_quality.csv', index=False)
-    print('Predicted air quality saved to predicted_air_quality.csv')
+    if pred: 
+        name, model_version = model_results.iloc[:1].Model.values[0], '1'
+        print(f'{name} is the best model with an accuracy of {model_results.iloc[:1].Accuracy.values[0]*100:.2f}%')
+        model_uri = f'models:/{name}/{model_version}'
+        load_model = mlflow.sklearn.load_model(model_uri)
+        pred = load_model.predict(data.drop('Air Quality', axis=1))
+        data['Predicted_Air_Quality'] = pred
+        data['Evaluate'] = data['Air Quality'] == data['Predicted_Air_Quality']
+        total_len, positive = len(data), data['Evaluate'].sum() 
+        pred_acc = positive / total_len * 100
+        print(f'Model name: {name}, Total data: {total_len}, Correct pred: {positive}, Wrong pred: {total_len-positive}, Predicted accuracy: {pred_acc:.2f}%')
+        data.to_csv(r'C:\Users\GANAPA\Downloads\MLFlow (MLOps)\predicted_air_quality.csv', index=False)
+        print('Predicted air quality saved to predicted_air_quality.csv')
 
 if __name__ == "__main__":
     """
@@ -184,14 +207,16 @@ if __name__ == "__main__":
     """
 
     file_path = r'C:\Users\GANAPA\Downloads\MLFlow (MLOps)\pollution_dataset.csv'
-    data = pd.read_csv(file_path)
     uri, experiment_name = 'http://localhost:5000', 'Air Quality Pred'
     define_experiment(uri, experiment_name), run_logs(experiment_name)
-    xtrain, xtest, ytrain, ytest = load_data(file_path)
+    data, (xtrain, xtest, ytrain, ytest) = load_data(file_path)
     model_results = train_and_log_models(xtrain, xtest, ytrain, ytest, file_path, True)
     print(model_results)
     predict(model_results, data)
 
+end_time = time.time()
+total_time = end_time - start_time
+print(f"Total running time: {total_time / 60:.2f} minutes")
 
 # Hint:
 # ./artifacts or ./mlruns are under the root directory where the code is executed (all under same project folder)
