@@ -52,6 +52,10 @@ pip install -r requirements.txt
     ```bash
     mlflow ui
     ```
+3. Run the Schedule_mlflow bat file to schedule the task:
+    ```bash
+    ./Schedule_mlflow.bat #for automatic job trigger (Optional)
+    ```
 4. Execute the main script to start training and logging models:
     ```bash
     python MLflow.py
