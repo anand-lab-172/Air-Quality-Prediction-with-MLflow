@@ -1,7 +1,7 @@
 """
 importing the required libraries and modules
 """
-import pandas as pd, warnings, mlflow, seaborn as sns, matplotlib.pyplot as plt, shutil, time
+import pandas as pd, warnings, mlflow, seaborn as sns, matplotlib.pyplot as plt, shutil, time, subprocess, webbrowser
 from sklearn.linear_model import LogisticRegression, RidgeClassifier, SGDClassifier, Perceptron, PassiveAggressiveClassifier
 from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier, ExtraTreesClassifier,
@@ -182,6 +182,9 @@ def define_experiment(uri, experiment_name):
     else:
         mlflow.set_experiment(experiment_name)
         print(f"Experiment '{experiment_name}' already exists with ID '{mlflow.get_experiment_by_name(experiment_name).experiment_id}'")
+
+    print(f"MLflow UI is running at: {uri}")
+    webbrowser.open(uri)
 
 def predict(model_results, data, pred=True):
     """
